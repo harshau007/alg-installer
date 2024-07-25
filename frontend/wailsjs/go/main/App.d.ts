@@ -4,6 +4,10 @@ import {main} from '../models';
 
 export function GetInstalledPackages():Promise<Array<main.InstalledPackage>>;
 
+export function InstallApp(arg1:string):Promise<void>;
+
+export function SearchLocalPackage(arg1:string):Promise<boolean>;
+
 export function SearchPackage(arg1:string):Promise<Array<main.PackageInfo>>;
 
 export function UninstallPackage(arg1:string):Promise<void>;

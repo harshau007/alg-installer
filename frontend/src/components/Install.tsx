@@ -109,26 +109,6 @@ const Install = () => {
   );
 
   const renderContent = () => {
-    if (isLoading) {
-      return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pl-2 pr-2">
-          {Array.from({ length: 9 }, (_, i) => (
-            <Card key={i} className="h-[12rem] flex flex-col">
-              <CardHeader>
-                <Skeleton className="h-6 w-[200px]" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-4 w-[150px]" />
-              </CardContent>
-              <CardFooter className="mt-4">
-                <Skeleton className="h-9 w-[100px]" />
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      );
-    }
-
     if (error) {
       return <div className="text-red-500 pl-2">{error}</div>;
     }

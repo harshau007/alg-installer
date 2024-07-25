@@ -250,17 +250,52 @@ func (a *App) UninstallPackage(packageName string) error {
 		return fmt.Errorf("package %s is not installed", packageName)
 	}
 
-	// In a real-world scenario, you'd use alpm's remove functionality here.
-	// For safety reasons, we're just simulating the uninstall process.
-	fmt.Printf("Simulating uninstall of package: %s\n", packageName)
 	cmd := exec.Command("sh", "-c", fmt.Sprintf("pkexec yay -Rdd --noconfirm %s", packageName))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Fatal("Error: ", err)
 	}
 	fmt.Println(string(output))
-	// Simulate a delay
-	time.Sleep(2 * time.Second)
 
 	return nil
+}
+
+func (a *App) SearchLocalPackage(pkg string) (bool, error) {
+	if pkg == "" {
+		return false, fmt.Errorf("empty package name provided")
+	}
+
+	local, err := searchLocalDB(pkg)
+	if err != nil {
+		return false, fmt.Errorf("error searching local DB: %w", err)
+	}
+
+	if local == nil {
+		return false, nil
+	}
+
+	return strings.Contains(strings.ToLower(local.Name()), strings.ToLower(pkg)), nil
+}
+
+func searchLocalDB(pkg string) (alpm.IPackage, error) {
+	if h == nil {
+		return nil, fmt.Errorf("ALPM handle is not initialized")
+	}
+
+	db, err := h.LocalDB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get local DB: %w", err)
+	}
+
+	res := db.Pkg(pkg)
+	return res, nil
+}
+
+func (a *App) InstallApp(pkg string) {
+	cmd := exec.Command("sh", "-c", fmt.Sprintf("pkexec yay -S --noconfirm %s", pkg))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Fatal("Error: ", err)
+	}
+	fmt.Println(string(output))
 }

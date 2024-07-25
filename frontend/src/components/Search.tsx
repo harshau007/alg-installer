@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import { FixedSizeGrid as Grid } from "react-window";
 import AutoSizer from "react-virtualized-auto-sizer";
 import { Input } from "@/components/ui/input";
@@ -11,11 +11,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { SearchPackage } from "../../wailsjs/go/main/App";
+import { Badge } from "./ui/badge";
+import { InstallApp, SearchPackage } from "../../wailsjs/go/main/App";
 import { main } from "wailsjs/go/models";
 import PackageDetails from "./PackageDetails";
-import { Badge } from "./ui/badge";
+import ErrorBoundary from "./ErrorBoundary";
+import { Skeleton } from "./ui/skeleton";
 
 interface SearchProps {
   setCurrentPage: (page: any) => void;
@@ -32,6 +33,8 @@ const Search: React.FC<SearchProps> = ({
   const [selectedApp, setSelectedApp] = useState<main.PackageInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const searchResultsRef = useRef<main.PackageInfo[]>([]);
+
   const handleSearch = async (): Promise<void> => {
     if (!searchTerm.trim()) {
       setError("Please enter a search term");
@@ -39,6 +42,7 @@ const Search: React.FC<SearchProps> = ({
     }
 
     setSearchResults([]);
+    searchResultsRef.current = [];
     setSelectedApp(null);
     setIsLoading(true);
     setError(null);
@@ -48,6 +52,7 @@ const Search: React.FC<SearchProps> = ({
         searchTerm.toLowerCase().trim().replace(/\s+/g, "-")
       );
       setSearchResults(res);
+      searchResultsRef.current = res;
       if (res.length === 0) {
         setError("No results found");
       }
@@ -66,9 +71,9 @@ const Search: React.FC<SearchProps> = ({
   };
 
   const handleInstall = useCallback(
-    (packageName: string): void => {
+    async (packageName: string): Promise<void> => {
       setInstallPackage(packageName);
-      setCurrentPage("install");
+      await InstallApp(packageName);
     },
     [setInstallPackage, setCurrentPage]
   );
@@ -84,14 +89,14 @@ const Search: React.FC<SearchProps> = ({
       style: React.CSSProperties;
     }) => {
       const index = rowIndex * 3 + columnIndex;
-      const result = searchResults[index];
+      const result = searchResultsRef.current[index];
       if (!result) return null;
 
       return (
         <div style={style} className="p-2">
           <Card
-            className="h-full flex flex-col cursor-pointer"
-            onClick={() => setSelectedApp(result)}
+            className="h-full flex flex-col grid-cols-3 cursor-pointer"
+            onClick={() => setSelectedApp({ ...result })}
           >
             <CardHeader>
               <div className="flex justify-between items-start">
@@ -100,7 +105,7 @@ const Search: React.FC<SearchProps> = ({
             </CardHeader>
             <CardContent className="flex-grow">
               <CardDescription>
-                {result.description.length > 70
+                {result.description && result.description.length > 70
                   ? `${result.description.substring(0, 80)}...`
                   : result.description}
               </CardDescription>
@@ -109,15 +114,6 @@ const Search: React.FC<SearchProps> = ({
               </p>
             </CardContent>
             <CardFooter className="mt-1">
-              {/* <Button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleInstall(result.name);
-                }}
-                className="w-full"
-              >
-                Install
-              </Button> */}
               <Badge variant="secondary" className="text-sm">
                 {result.repository}
               </Badge>
@@ -126,7 +122,7 @@ const Search: React.FC<SearchProps> = ({
         </div>
       );
     },
-    [searchResults, handleInstall]
+    []
   );
 
   const renderContent = () => {
@@ -155,17 +151,15 @@ const Search: React.FC<SearchProps> = ({
       return <div className="text-red-500 pl-2">{error}</div>;
     }
 
-    // if (searchResults.length === 0 && !isLoading) {
-    //   return <div>No results found. Try a different search term.</div>;
-    // }
-
     return (
       <div className="h-[calc(100vh-200px)]">
         <AutoSizer>
           {({ height, width }: { height: number; width: number }) => {
-            const columnCount = width >= 1024 ? 3 : width >= 768 ? 3 : 1;
+            const columnCount = width >= 1024 ? 3 : width >= 768 ? 2 : 1;
             const columnWidth = width / columnCount;
-            const rowCount = Math.ceil(searchResults.length / columnCount);
+            const rowCount = Math.ceil(
+              searchResultsRef.current.length / columnCount
+            );
             return (
               <Grid
                 columnCount={columnCount}
@@ -185,35 +179,37 @@ const Search: React.FC<SearchProps> = ({
   };
 
   return (
-    <div className="space-y-8 h-full">
-      {selectedApp ? (
-        <PackageDetails
-          app={selectedApp}
-          onBack={() => setSelectedApp(null)}
-          onInstall={() => handleInstall(selectedApp.name)}
-        />
-      ) : (
-        <>
-          <h1 className="text-4xl font-bold pl-2 pr-2">Search Packages</h1>
-          <div className="flex space-x-4 pl-2 pr-2">
-            <Input
-              type="text"
-              placeholder="Search for packages..."
-              value={searchTerm}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setSearchTerm(e.target.value)
-              }
-              onKeyDown={handleKeyPress}
-              className="flex-grow"
-            />
-            <Button onClick={handleSearch} disabled={isLoading}>
-              {isLoading ? "Searching..." : "Search"}
-            </Button>
-          </div>
-          {renderContent()}
-        </>
-      )}
-    </div>
+    <ErrorBoundary>
+      <div className="space-y-8 h-full">
+        {selectedApp ? (
+          <PackageDetails
+            app={selectedApp}
+            onBack={() => setSelectedApp(null)}
+            onInstall={() => handleInstall(selectedApp.name)}
+          />
+        ) : (
+          <>
+            <h1 className="text-4xl font-bold pl-2 pr-2">Search Packages</h1>
+            <div className="flex space-x-4 pl-2 pr-2">
+              <Input
+                type="text"
+                placeholder="Search for packages..."
+                value={searchTerm}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setSearchTerm(e.target.value)
+                }
+                onKeyDown={handleKeyPress}
+                className="flex-grow"
+              />
+              <Button onClick={handleSearch} disabled={isLoading}>
+                {isLoading ? "Searching..." : "Search"}
+              </Button>
+            </div>
+            {renderContent()}
+          </>
+        )}
+      </div>
+    </ErrorBoundary>
   );
 };
 

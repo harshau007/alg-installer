@@ -6,6 +6,14 @@ export function GetInstalledPackages() {
   return window['go']['main']['App']['GetInstalledPackages']();
 }
 
+export function InstallApp(arg1) {
+  return window['go']['main']['App']['InstallApp'](arg1);
+}
+
+export function SearchLocalPackage(arg1) {
+  return window['go']['main']['App']['SearchLocalPackage'](arg1);
+}
+
 export function SearchPackage(arg1) {
   return window['go']['main']['App']['SearchPackage'](arg1);
 }

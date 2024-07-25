@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   Card,
   CardContent,
@@ -10,6 +10,7 @@ import {
 import { Badge } from "../components/ui/badge";
 import { ScrollArea } from "../components/ui/scroll-area";
 import PackageDetails from "./PackageDetails";
+import ErrorBoundary from "./ErrorBoundary";
 
 interface AppInfo {
   name: string;
@@ -93,65 +94,71 @@ const featuredApps: AppInfo[] = [
 const Home: React.FC<HomeProps> = ({ setCurrentPage, setInstallPackage }) => {
   const [selectedApp, setSelectedApp] = useState<AppInfo | null>(null);
 
-  const handleInstall = (packageName: string) => {
-    setInstallPackage(packageName);
-    setCurrentPage("install");
-  };
+  const handleInstall = useCallback(
+    (packageName: string) => {
+      setInstallPackage(packageName);
+      setCurrentPage("install");
+    },
+    [setInstallPackage, setCurrentPage]
+  );
+
+  const handleBack = useCallback(() => {
+    setSelectedApp(null);
+  }, []);
+
+  const handleSelectApp = useCallback((app: AppInfo) => {
+    setSelectedApp({ ...app });
+  }, []);
 
   if (selectedApp) {
     return (
-      <PackageDetails
-        app={selectedApp}
-        onBack={() => setSelectedApp(null)}
-        onInstall={() => handleInstall(selectedApp.name)}
-      />
+      <ErrorBoundary>
+        <PackageDetails
+          app={selectedApp}
+          onBack={handleBack}
+          onInstall={() => handleInstall(selectedApp.name)}
+        />
+      </ErrorBoundary>
     );
   }
 
   return (
-    <div className="space-y-8">
-      <ScrollArea className="h-[calc(100vh-12rem)]">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {featuredApps.map((app, index) => (
-            <Card
-              key={index}
-              className="h-full flex flex-col cursor-pointer"
-              onClick={() => setSelectedApp(app)}
-            >
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <CardTitle>{app.name}</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="flex-grow">
-                <CardDescription>
-                  {app.description.length > 70
-                    ? `${app.description.substring(0, 80)}...`
-                    : app.description}
-                </CardDescription>
-                <p className="opacity-50 text-xs pt-2">
-                  Version: {app.version}
-                </p>
-              </CardContent>
-              <CardFooter className="mt-1">
-                {/* <Button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleInstall(result.name);
-              }}
-              className="w-full"
-            >
-              Install
-            </Button> */}
-                <Badge variant="secondary" className="text-sm">
-                  {app.repository}
-                </Badge>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      </ScrollArea>
-    </div>
+    <ErrorBoundary>
+      <div className="space-y-8">
+        <ScrollArea className="h-[calc(100vh-10rem)]">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {featuredApps.map((app, index) => (
+              <Card
+                key={index}
+                className="h-full flex flex-col cursor-pointer"
+                onClick={() => handleSelectApp(app)}
+              >
+                <CardHeader>
+                  <div className="flex justify-between items-start">
+                    <CardTitle>{app.name}</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="flex-grow">
+                  <CardDescription>
+                    {app.description && app.description.length > 70
+                      ? `${app.description.substring(0, 80)}...`
+                      : app.description}
+                  </CardDescription>
+                  <p className="opacity-50 text-xs pt-2">
+                    Version: {app.version}
+                  </p>
+                </CardContent>
+                <CardFooter className="mt-1">
+                  <Badge variant="secondary" className="text-sm">
+                    {app.repository}
+                  </Badge>
+                </CardFooter>
+              </Card>
+            ))}
+          </div>
+        </ScrollArea>
+      </div>
+    </ErrorBoundary>
   );
 };
 
