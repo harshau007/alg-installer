@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { FixedSizeGrid as Grid } from "react-window";
 import AutoSizer from "react-virtualized-auto-sizer";
 import { Input } from "@/components/ui/input";
@@ -12,26 +12,19 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "./ui/badge";
-import { InstallApp, SearchPackage } from "../../wailsjs/go/main/App";
+import { SearchPackage, SearchLocalPackage } from "../../wailsjs/go/main/App";
 import { main } from "wailsjs/go/models";
 import PackageDetails from "./PackageDetails";
 import ErrorBoundary from "./ErrorBoundary";
 import { Skeleton } from "./ui/skeleton";
 
-interface SearchProps {
-  setCurrentPage: (page: any) => void;
-  setInstallPackage: (packageName: string) => void;
-}
-
-const Search: React.FC<SearchProps> = ({
-  setCurrentPage,
-  setInstallPackage,
-}) => {
+const Search: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [searchResults, setSearchResults] = useState<main.PackageInfo[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [selectedApp, setSelectedApp] = useState<main.PackageInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [installedApps, setInstalledApps] = useState<Set<string>>(new Set());
 
   const searchResultsRef = useRef<main.PackageInfo[]>([]);
 
@@ -55,6 +48,8 @@ const Search: React.FC<SearchProps> = ({
       searchResultsRef.current = res;
       if (res.length === 0) {
         setError("No results found");
+      } else {
+        checkInstalledApps(res);
       }
     } catch (error) {
       console.error("Error searching packages:", error);
@@ -64,19 +59,32 @@ const Search: React.FC<SearchProps> = ({
     }
   };
 
+  const checkInstalledApps = useCallback(async (apps: main.PackageInfo[]) => {
+    const installedSet = new Set<string>();
+    for (const app of apps) {
+      try {
+        const isInstalled = await SearchLocalPackage(app.name);
+        if (isInstalled) {
+          installedSet.add(app.name);
+        }
+      } catch (error) {
+        console.error(`Error checking if ${app.name} is installed:`, error);
+      }
+    }
+    setInstalledApps(installedSet);
+  }, []);
+
   const handleKeyPress = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       handleSearch();
     }
   };
 
-  const handleInstall = useCallback(
-    async (packageName: string): Promise<void> => {
-      setInstallPackage(packageName);
-      await InstallApp(packageName);
-    },
-    [setInstallPackage, setCurrentPage]
-  );
+  const handleInstallStateChange = useCallback(() => {
+    if (selectedApp) {
+      checkInstalledApps([selectedApp]);
+    }
+  }, [selectedApp, checkInstalledApps]);
 
   const CardItem = useCallback(
     ({
@@ -122,7 +130,7 @@ const Search: React.FC<SearchProps> = ({
         </div>
       );
     },
-    []
+    [installedApps]
   );
 
   const renderContent = () => {
@@ -185,7 +193,7 @@ const Search: React.FC<SearchProps> = ({
           <PackageDetails
             app={selectedApp}
             onBack={() => setSelectedApp(null)}
-            onInstall={() => handleInstall(selectedApp.name)}
+            onInstallStateChange={handleInstallStateChange}
           />
         ) : (
           <>

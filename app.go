@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -20,6 +21,8 @@ var h *alpm.Handle
 // var dbs []alpm.IDB
 var dbs []alpm.IDB
 
+var DesktopEnv string
+
 // App struct
 type App struct {
 	ctx context.Context
@@ -34,6 +37,8 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	// Perform your setup here
 	a.ctx = ctx
+
+	DesktopEnv = getDesktopEnvironment()
 
 	var err error
 	h, err = alpm.Initialize("/", "/var/lib/pacman")
@@ -192,14 +197,13 @@ func convertDependList(depList alpm.IDependList) []string {
 	return deps
 }
 
-type InstalledPackage struct {
-	Name        string `json:"name"`
-	Version     string `json:"version"`
-	Repository  string `json:"repository"`
-	LastUpdated string `json:"lastupdated"`
-}
+func (a *App) GetInstalledPackages() ([]PackageInfo, error) {
+	h, err := alpm.Initialize("/", "/var/lib/pacman")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to initialize alpm: %v\n", err)
+		os.Exit(1)
+	}
 
-func (a *App) GetInstalledPackages() ([]InstalledPackage, error) {
 	if h == nil {
 		return nil, fmt.Errorf("ALPM handle is not initialized")
 	}
@@ -209,16 +213,21 @@ func (a *App) GetInstalledPackages() ([]InstalledPackage, error) {
 		return nil, fmt.Errorf("failed to get local DB: %v", err)
 	}
 
-	var packages []InstalledPackage
+	var packages []PackageInfo
 	var mutex sync.Mutex
 
 	err = db.PkgCache().ForEach(func(pkg alpm.IPackage) error {
 		mutex.Lock()
-		packages = append(packages, InstalledPackage{
+		lastUpdated := pkg.BuildDate().UTC().Format("Jan. 2, 2006, 3 p.m. MST")
+		packages = append(packages, PackageInfo{
 			Name:        pkg.Name(),
 			Version:     pkg.Version(),
-			Repository:  db.Name(),
-			LastUpdated: pkg.BuildDate().UTC().Format("Jan. 2, 2006, 3 p.m. MST"),
+			Description: pkg.Description(),
+			Repository:  pkg.DB().Name(),
+			Maintainer:  pkg.Packager(),
+			UpstreamURL: pkg.URL(),
+			DependList:  convertDependList(pkg.Depends()),
+			LastUpdated: lastUpdated,
 		})
 		mutex.Unlock()
 		return nil
@@ -235,31 +244,6 @@ func (a *App) GetInstalledPackages() ([]InstalledPackage, error) {
 	return packages, nil
 }
 
-func (a *App) UninstallPackage(packageName string) error {
-	if h == nil {
-		return fmt.Errorf("ALPM handle is not initialized")
-	}
-
-	db, err := h.LocalDB()
-	if err != nil {
-		return fmt.Errorf("failed to get local DB: %v", err)
-	}
-
-	pkg := db.Pkg(packageName)
-	if pkg == nil {
-		return fmt.Errorf("package %s is not installed", packageName)
-	}
-
-	cmd := exec.Command("sh", "-c", fmt.Sprintf("pkexec yay -Rdd --noconfirm %s", packageName))
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Fatal("Error: ", err)
-	}
-	fmt.Println(string(output))
-
-	return nil
-}
-
 func (a *App) SearchLocalPackage(pkg string) (bool, error) {
 	if pkg == "" {
 		return false, fmt.Errorf("empty package name provided")
@@ -274,10 +258,17 @@ func (a *App) SearchLocalPackage(pkg string) (bool, error) {
 		return false, nil
 	}
 
+	fmt.Println(strings.Contains(strings.ToLower(local.Name()), strings.ToLower(pkg)))
+
 	return strings.Contains(strings.ToLower(local.Name()), strings.ToLower(pkg)), nil
 }
 
 func searchLocalDB(pkg string) (alpm.IPackage, error) {
+	h, err := alpm.Initialize("/", "/var/lib/pacman")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to initialize alpm: %v\n", err)
+		os.Exit(1)
+	}
 	if h == nil {
 		return nil, fmt.Errorf("ALPM handle is not initialized")
 	}
@@ -291,11 +282,89 @@ func searchLocalDB(pkg string) (alpm.IPackage, error) {
 	return res, nil
 }
 
-func (a *App) InstallApp(pkg string) {
-	cmd := exec.Command("sh", "-c", fmt.Sprintf("pkexec yay -S --noconfirm %s", pkg))
-	output, err := cmd.CombinedOutput()
+func (a *App) CheckPackageInstalled(packageName string) bool {
+	h, err := alpm.Initialize("/", "/var/lib/pacman")
 	if err != nil {
-		log.Fatal("Error: ", err)
+		fmt.Fprintf(os.Stderr, "failed to initialize alpm: %v\n", err)
+		os.Exit(1)
 	}
-	fmt.Println(string(output))
+	if h == nil {
+		log.Fatal("ALPM handle is not initialized")
+	}
+	localDB, err := h.LocalDB()
+	if err != nil {
+		log.Fatal(err)
+	}
+	packageHandle := localDB.Pkg(packageName)
+	return packageHandle != nil
+}
+
+func (a *App) Install(pkg string) {
+	cmdStr := fmt.Sprintf("pkexec yay -S %s --noconfirm", pkg)
+	cmd := exec.Command("sh", "-c", cmdStr)
+	fmt.Println("Executing command:", cmdStr)
+
+	var outBuffer, errBuffer bytes.Buffer
+	cmd.Stdout = &outBuffer
+	cmd.Stderr = &errBuffer
+
+	err := cmd.Run()
+	if err != nil {
+		fmt.Println("Error executing command:", err)
+		fmt.Println("stderr:", errBuffer.String())
+		return
+	}
+
+	fmt.Println("stdout:", outBuffer.String())
+	fmt.Println("stderr:", errBuffer.String())
+}
+
+func (a *App) Uninstall(pkg string) {
+	cmdStr := fmt.Sprintf("pkexec yay -Rdd %s --noconfirm", pkg)
+	cmd := exec.Command("sh", "-c", cmdStr)
+	fmt.Println("Executing command:", cmdStr)
+
+	var outBuffer, errBuffer bytes.Buffer
+	cmd.Stdout = &outBuffer
+	cmd.Stderr = &errBuffer
+
+	err := cmd.Run()
+	if err != nil {
+		fmt.Println("Error executing command:", err)
+		fmt.Println("stderr:", errBuffer.String())
+		return
+	}
+
+	fmt.Println("stdout:", outBuffer.String())
+	fmt.Println("stderr:", errBuffer.String())
+}
+
+// func openTerminal(cmd string) {
+// 	var pkexecCmd *exec.Cmd
+
+// 	switch DesktopEnv {
+// 	case "xfce":
+// 		pkexecCmd = exec.Command("xfce4-terminal", "-e", cmd)
+// 	case "gnome":
+// 		pkexecCmd = exec.Command("gnome-terminal", "--", "bash", "-c", cmd)
+// 	case "kde":
+// 		pkexecCmd = exec.Command("konsole", "-e", cmd)
+// 	case "mate":
+// 		pkexecCmd = exec.Command("mate-terminal", "-e", cmd)
+// 	case "lxde":
+// 		pkexecCmd = exec.Command("lxterminal", "-e", cmd)
+// 	case "lxqt":
+// 		pkexecCmd = exec.Command("qterminal", "-e", cmd)
+// 	default:
+// 		fmt.Printf("Unsupported desktop environment: %s\n", DesktopEnv)
+// 		return
+// 	}
+
+// 	if err := pkexecCmd.Run(); err != nil {
+// 		fmt.Printf("Error executing command: %v\n", err)
+// 	}
+// }
+
+func getDesktopEnvironment() string {
+	return strings.ToLower(os.Getenv("XDG_CURRENT_DESKTOP"))
 }

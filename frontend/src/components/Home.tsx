@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -11,6 +11,7 @@ import { Badge } from "../components/ui/badge";
 import { ScrollArea } from "../components/ui/scroll-area";
 import PackageDetails from "./PackageDetails";
 import ErrorBoundary from "./ErrorBoundary";
+import { CheckPackageInstalled } from "../../wailsjs/go/main/App";
 
 interface AppInfo {
   name: string;
@@ -23,14 +24,9 @@ interface AppInfo {
   lastupdated: string;
 }
 
-interface HomeProps {
-  setCurrentPage: (page: "home" | "search" | "install") => void;
-  setInstallPackage: (packageName: string) => void;
-}
-
 const featuredApps: AppInfo[] = [
   {
-    name: "Firefox",
+    name: "firefox",
     description: "A fast, private and secure web browser",
     repository: "extra",
     version: "89.0.2",
@@ -40,14 +36,59 @@ const featuredApps: AppInfo[] = [
     upstreamurl: "",
   },
   {
-    name: "GIMP",
+    name: "gimp",
     description: "GNU Image Manipulation Program",
-    repository: "core",
-    version: "2.10.24",
-    maintainer: "GIMP Team",
-    lastupdated: "2023-05-15",
-    dependlist: [],
-    upstreamurl: "",
+    repository: "extra",
+    version: "2.10.38-1",
+    maintainer: "Christian Hesse, Christian Heusel",
+    lastupdated: "May 3, 2024, 9:48 a.m. UTC",
+    dependlist: [
+      "aalib",
+      "babl",
+      "bzip2",
+      "cairo",
+      "fontconfig",
+      "freetype2",
+      "gcc-libs",
+      "gdk-pixbuf2",
+      "gegl",
+      "glib2",
+      "glibc",
+      "gtk2",
+      "harfbuzz",
+      "hicolor-icon-theme",
+      "iso-codes",
+      "json-glib",
+      "lcms2",
+      "libgexiv2",
+      "libgudev",
+      "libheif",
+      "libjpeg-turbo",
+      "libjxl",
+      "libmng",
+      "libmypaint",
+      "libpng",
+      "librsvg",
+      "libtiff",
+      "libunwind",
+      "libwebp",
+      "libwmf",
+      "libx11",
+      "libxcursor",
+      "libxext",
+      "libxfixes",
+      "libxmu",
+      "libxpm",
+      "mypaint-brushes1",
+      "openexr",
+      "openjpeg2",
+      "pango",
+      "poppler-data",
+      "poppler-glib",
+      "xz",
+      "zlib",
+    ],
+    upstreamurl: "https://www.gimp.org/",
   },
   {
     name: "VLC",
@@ -60,9 +101,9 @@ const featuredApps: AppInfo[] = [
     upstreamurl: "",
   },
   {
-    name: "VSCode",
+    name: "visual-studio-code-bin",
     description: "Lightweight but powerful source code editor",
-    repository: "core",
+    repository: "AUR",
     version: "1.57.0",
     maintainer: "Microsoft",
     lastupdated: "2023-06-10",
@@ -89,18 +130,48 @@ const featuredApps: AppInfo[] = [
     dependlist: [],
     upstreamurl: "",
   },
+  {
+    name: "zed",
+    description:
+      "A high-performance, multiplayer code editor from the creators of Atom and Tree-sitter",
+    repository: "extra",
+    version: "0.145.1-1",
+    maintainer: "Caleb Maclennan",
+    lastupdated: "July 24, 2024, 6:21 p.m. UTC",
+    dependlist: [],
+    upstreamurl: "https://zed.dev",
+  },
 ];
 
-const Home: React.FC<HomeProps> = ({ setCurrentPage, setInstallPackage }) => {
+const Home = () => {
   const [selectedApp, setSelectedApp] = useState<AppInfo | null>(null);
+  const [installedApps, setInstalledApps] = useState<Set<string>>(new Set());
 
-  const handleInstall = useCallback(
-    (packageName: string) => {
-      setInstallPackage(packageName);
-      setCurrentPage("install");
-    },
-    [setInstallPackage, setCurrentPage]
-  );
+  const checkInstalledApps = useCallback(async () => {
+    const installedSet = new Set<string>();
+    for (const app of featuredApps) {
+      try {
+        const interval = setInterval(async () => {
+          const isInstalled = await CheckPackageInstalled(app.name);
+          if (isInstalled) {
+            installedSet.add(app.name);
+          }
+        }, 3000);
+        return () => clearInterval(interval);
+      } catch (error) {
+        console.error(`Error checking if ${app.name} is installed:`, error);
+      }
+    }
+    setInstalledApps(installedSet);
+  }, []);
+
+  useEffect(() => {
+    checkInstalledApps();
+  }, [checkInstalledApps]);
+
+  const handleInstallStateChange = useCallback(() => {
+    checkInstalledApps();
+  }, [checkInstalledApps]);
 
   const handleBack = useCallback(() => {
     setSelectedApp(null);
@@ -116,7 +187,7 @@ const Home: React.FC<HomeProps> = ({ setCurrentPage, setInstallPackage }) => {
         <PackageDetails
           app={selectedApp}
           onBack={handleBack}
-          onInstall={() => handleInstall(selectedApp.name)}
+          onInstallStateChange={handleInstallStateChange}
         />
       </ErrorBoundary>
     );
@@ -125,6 +196,7 @@ const Home: React.FC<HomeProps> = ({ setCurrentPage, setInstallPackage }) => {
   return (
     <ErrorBoundary>
       <div className="space-y-8">
+        <h1 className="text-4xl font-bold pl-3 pr-3">Mentioned Packages</h1>
         <ScrollArea className="h-[calc(100vh-10rem)]">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {featuredApps.map((app, index) => (

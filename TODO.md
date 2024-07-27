@@ -2,6 +2,6 @@
 - [x] Search Local DB and display packages in Install screen
 - [x] Add Install Func
 - [x] Add Uninstall Func
-- [ ] Do State Management while installing with loader
-- [ ] Do State Managerment while uninstalling with loader
+- [x] Do State Management while installing with loader
+- [x] Do State Managerment while uninstalling with loader
 - [ ] Add Update All for updation of all packages

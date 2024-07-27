@@ -3,7 +3,7 @@ import { ThemeProvider } from "./components/ui/theme-provider";
 import Navbar from "./components/Navbar";
 import Home from "./components/Home";
 import Search from "./components/Search";
-import Install from "./components/Install";
+import Install from "./components/Installed";
 import { Toaster } from "./components/ui/toaster";
 
 type PageType = "home" | "search" | "install";
@@ -15,28 +15,13 @@ const App: React.FC = () => {
   const renderPage = () => {
     switch (currentPage) {
       case "home":
-        return (
-          <Home
-            setCurrentPage={setCurrentPage}
-            setInstallPackage={setInstallPackage}
-          />
-        );
+        return <Home />;
       case "search":
-        return (
-          <Search
-            setCurrentPage={setCurrentPage}
-            setInstallPackage={setInstallPackage}
-          />
-        );
+        return <Search />;
       case "install":
         return <Install />;
       default:
-        return (
-          <Home
-            setCurrentPage={setCurrentPage}
-            setInstallPackage={setInstallPackage}
-          />
-        );
+        return <Home />;
     }
   };
 
