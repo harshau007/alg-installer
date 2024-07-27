@@ -10,6 +10,10 @@ export function GetInstalledPackages() {
   return window['go']['main']['App']['GetInstalledPackages']();
 }
 
+export function GetMultiplePackageInfo(arg1) {
+  return window['go']['main']['App']['GetMultiplePackageInfo'](arg1);
+}
+
 export function Install(arg1) {
   return window['go']['main']['App']['Install'](arg1);
 }

@@ -6,6 +6,8 @@ export function CheckPackageInstalled(arg1:string):Promise<boolean>;
 
 export function GetInstalledPackages():Promise<Array<main.PackageInfo>>;
 
+export function GetMultiplePackageInfo(arg1:Array<string>):Promise<Array<main.PackageInfo>>;
+
 export function Install(arg1:string):Promise<void>;
 
 export function SearchLocalPackage(arg1:string):Promise<boolean>;

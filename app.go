@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -367,4 +368,77 @@ func (a *App) Uninstall(pkg string) {
 
 func getDesktopEnvironment() string {
 	return strings.ToLower(os.Getenv("XDG_CURRENT_DESKTOP"))
+}
+
+func (a *App) GetMultiplePackageInfo(packageNames []string) ([]PackageInfo, error) {
+	var results []PackageInfo
+	var wg sync.WaitGroup
+	resultChan := make(chan PackageInfo, len(packageNames))
+	errorChan := make(chan error, len(packageNames))
+
+	for _, pkgName := range packageNames {
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+
+			// Search for package info
+			searchResults := a.SearchPackage(name)
+
+			var pkg PackageInfo
+			for _, result := range searchResults {
+				if result.Repository == "core" || result.Repository == "extra" || result.Repository == "AUR" {
+					pkg = result
+					pkg.Name = name // Ensure the name matches the search query
+					resultChan <- pkg
+					return
+				}
+			}
+
+			// If no package was found in core, extra, or AUR, add a placeholder
+			if pkg.Name == "" {
+				resultChan <- PackageInfo{
+					Name:        name,
+					Description: "Package not found in core, extra, or AUR",
+					Repository:  "unknown",
+				}
+			}
+		}(pkgName)
+	}
+
+	// Close channels when all goroutines are done
+	go func() {
+		wg.Wait()
+		close(resultChan)
+		close(errorChan)
+	}()
+
+	// Collect results and errors
+	for i := 0; i < len(packageNames); i++ {
+		select {
+		case result := <-resultChan:
+			results = append(results, result)
+		case err := <-errorChan:
+			return nil, fmt.Errorf("error processing packages: %w", err)
+		case <-a.ctx.Done():
+			return nil, a.ctx.Err()
+		}
+	}
+
+	// Sort results to maintain order of input packageNames
+	sort.Slice(results, func(i, j int) bool {
+		iIndex := indexOf(packageNames, results[i].Name)
+		jIndex := indexOf(packageNames, results[j].Name)
+		return iIndex < jIndex
+	})
+
+	return results, nil
+}
+
+func indexOf(slice []string, item string) int {
+	for i, s := range slice {
+		if s == item {
+			return i
+		}
+	}
+	return -1
 }

@@ -100,6 +100,8 @@ const Search: React.FC = () => {
       const result = searchResultsRef.current[index];
       if (!result) return null;
 
+      const isInstalled = installedApps.has(result.name);
+
       return (
         <div style={style} className="p-2">
           <Card
@@ -109,6 +111,11 @@ const Search: React.FC = () => {
             <CardHeader>
               <div className="flex justify-between items-start">
                 <CardTitle>{result.name}</CardTitle>
+                {isInstalled && (
+                  <Badge variant="secondary" className="text-sm">
+                    Installed
+                  </Badge>
+                )}
               </div>
             </CardHeader>
             <CardContent className="flex-grow">
