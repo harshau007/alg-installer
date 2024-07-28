@@ -6,12 +6,20 @@ export function CheckPackageInstalled(arg1) {
   return window['go']['main']['App']['CheckPackageInstalled'](arg1);
 }
 
+export function GetAvailableUpdates() {
+  return window['go']['main']['App']['GetAvailableUpdates']();
+}
+
 export function GetInstalledPackages() {
   return window['go']['main']['App']['GetInstalledPackages']();
 }
 
 export function GetMultiplePackageInfo(arg1) {
   return window['go']['main']['App']['GetMultiplePackageInfo'](arg1);
+}
+
+export function HumanReadableSize(arg1) {
+  return window['go']['main']['App']['HumanReadableSize'](arg1);
 }
 
 export function Install(arg1) {
@@ -28,4 +36,12 @@ export function SearchPackage(arg1) {
 
 export function Uninstall(arg1) {
   return window['go']['main']['App']['Uninstall'](arg1);
+}
+
+export function UpdateAllPkg() {
+  return window['go']['main']['App']['UpdateAllPkg']();
+}
+
+export function UpdateSinglePkg(arg1) {
+  return window['go']['main']['App']['UpdateSinglePkg'](arg1);
 }

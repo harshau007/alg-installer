@@ -15,6 +15,7 @@ import (
 	"os/exec"
 
 	"github.com/Jguer/go-alpm/v2"
+	paconf "github.com/Morganamilo/go-pacmanconf"
 )
 
 var h *alpm.Handle
@@ -441,4 +442,206 @@ func indexOf(slice []string, item string) int {
 		}
 	}
 	return -1
+}
+
+type UpdateInfo struct {
+	Name         string `json:"name"`
+	OldVersion   string `json:"oldVersion"`
+	NewVersion   string `json:"newVersion"`
+	Repository   string `json:"repository"`
+	DownloadSize int64  `json:"downloadSize"`
+}
+
+// GetAvailableUpdates returns a list of available updates for packages
+func (a *App) GetAvailableUpdates() ([]UpdateInfo, error) {
+	// Initialize ALPM
+	h, err := alpm.Initialize("/", "/var/lib/pacman")
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize alpm: %v", err)
+	}
+	defer h.Release()
+
+	// Parse pacman configuration
+	pacmanConfig, _, err := paconf.ParseFile("/etc/pacman.conf")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse pacman config: %v", err)
+	}
+
+	// Register sync databases
+	for _, repo := range pacmanConfig.Repos {
+		db, err := h.RegisterSyncDB(repo.Name, 0)
+		if err != nil {
+			return nil, fmt.Errorf("failed to register sync db %s: %v", repo.Name, err)
+		}
+		db.SetServers(repo.Servers)
+	}
+
+	// Get local database
+	localDB, err := h.LocalDB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get local DB: %v", err)
+	}
+
+	// Get sync databases
+	syncDBs, err := h.SyncDBs()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get sync DBs: %v", err)
+	}
+
+	var updates []UpdateInfo
+	var mutex sync.Mutex
+	var wg sync.WaitGroup
+
+	// Check for updates in official repositories
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for _, pkg := range localDB.PkgCache().Slice() {
+			select {
+			case <-a.ctx.Done():
+				return
+			default:
+				newPkg := pkg.SyncNewVersion(syncDBs)
+				if newPkg != nil {
+					mutex.Lock()
+					updates = append(updates, UpdateInfo{
+						Name:         pkg.Name(),
+						OldVersion:   pkg.Version(),
+						NewVersion:   newPkg.Version(),
+						Repository:   newPkg.DB().Name(),
+						DownloadSize: newPkg.Size(),
+					})
+					mutex.Unlock()
+				}
+			}
+		}
+	}()
+
+	// Check for AUR updates
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		aurUpdates, err := a.checkAURUpdates()
+		if err != nil {
+			log.Printf("Error checking AUR updates: %v", err)
+			return
+		}
+		mutex.Lock()
+		updates = append(updates, aurUpdates...)
+		mutex.Unlock()
+	}()
+
+	wg.Wait()
+
+	return updates, nil
+}
+
+func (a *App) checkAURUpdates() ([]UpdateInfo, error) {
+	var aurUpdates []UpdateInfo
+
+	// Get list of AUR packages
+	cmd := exec.CommandContext(a.ctx, "yay", "-Qm")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get AUR package list: %v", err)
+	}
+
+	aurPackages := strings.Split(strings.TrimSpace(string(output)), "\n")
+
+	for _, pkg := range aurPackages {
+		select {
+		case <-a.ctx.Done():
+			return aurUpdates, a.ctx.Err()
+		default:
+			parts := strings.Fields(pkg)
+			if len(parts) != 2 {
+				continue
+			}
+			name, version := parts[0], parts[1]
+
+			// Check for updates using AUR RPC
+			cmd := exec.CommandContext(a.ctx, "curl", "-s", fmt.Sprintf("https://aur.archlinux.org/rpc/v5/info/%s", name))
+			output, err := cmd.Output()
+			if err != nil {
+				log.Printf("Error checking AUR for package %s: %v", name, err)
+				continue
+			}
+
+			var aurResponse struct {
+				Results []struct {
+					Version string `json:"Version"`
+				} `json:"results"`
+			}
+			err = json.Unmarshal(output, &aurResponse)
+			if err != nil {
+				log.Printf("Error parsing AUR response for package %s: %v", name, err)
+				continue
+			}
+
+			if len(aurResponse.Results) > 0 && aurResponse.Results[0].Version != version {
+				aurUpdates = append(aurUpdates, UpdateInfo{
+					Name:         name,
+					OldVersion:   version,
+					NewVersion:   aurResponse.Results[0].Version,
+					Repository:   "AUR",
+					DownloadSize: 0,
+				})
+			}
+		}
+	}
+
+	return aurUpdates, nil
+}
+
+// HumanReadableSize converts bytes to a human-readable string
+func (a *App) HumanReadableSize(size int64) string {
+	floatsize := float32(size)
+	units := [...]string{"", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi", "Yi"}
+	for _, unit := range units {
+		if floatsize < 1024 {
+			return fmt.Sprintf("%.1f %sB", floatsize, unit)
+		}
+		floatsize /= 1024
+	}
+	return fmt.Sprintf("%d%s", size, "B")
+}
+
+func (a *App) UpdateSinglePkg(pkg string) {
+	cmdStr := fmt.Sprintf("pkexec yay -S %s --noconfirm", pkg)
+	cmd := exec.Command("sh", "-c", cmdStr)
+	fmt.Println("Executing command:", cmdStr)
+
+	var outBuffer, errBuffer bytes.Buffer
+	cmd.Stdout = &outBuffer
+	cmd.Stderr = &errBuffer
+
+	err := cmd.Run()
+	if err != nil {
+		fmt.Println("Error executing command:", err)
+		fmt.Println("stderr:", errBuffer.String())
+		return
+	}
+
+	fmt.Println("stdout:", outBuffer.String())
+	fmt.Println("stderr:", errBuffer.String())
+}
+
+func (a *App) UpdateAllPkg() {
+	cmdStr := "pkexec yay -Syu --noconfirm"
+	cmd := exec.Command("sh", "-c", cmdStr)
+	fmt.Println("Executing command:", cmdStr)
+
+	var outBuffer, errBuffer bytes.Buffer
+	cmd.Stdout = &outBuffer
+	cmd.Stderr = &errBuffer
+
+	err := cmd.Run()
+	if err != nil {
+		fmt.Println("Error executing command:", err)
+		fmt.Println("stderr:", errBuffer.String())
+		return
+	}
+
+	fmt.Println("stdout:", outBuffer.String())
+	fmt.Println("stderr:", errBuffer.String())
 }

@@ -26,6 +26,26 @@ export namespace main {
 	        this.lastupdated = source["lastupdated"];
 	    }
 	}
+	export class UpdateInfo {
+	    name: string;
+	    oldVersion: string;
+	    newVersion: string;
+	    repository: string;
+	    downloadSize: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.oldVersion = source["oldVersion"];
+	        this.newVersion = source["newVersion"];
+	        this.repository = source["repository"];
+	        this.downloadSize = source["downloadSize"];
+	    }
+	}
 
 }
 

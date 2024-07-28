@@ -5,8 +5,9 @@ import Home from "./components/Home";
 import Search from "./components/Search";
 import Install from "./components/Installed";
 import { Toaster } from "./components/ui/toaster";
+import Updates from "./components/Updates";
 
-type PageType = "home" | "search" | "install";
+type PageType = "home" | "search" | "install" | "updates";
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<PageType>("home");
@@ -20,6 +21,8 @@ const App: React.FC = () => {
         return <Search />;
       case "install":
         return <Install />;
+      case "updates":
+        return <Updates />;
       default:
         return <Home />;
     }

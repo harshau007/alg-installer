@@ -1,9 +1,9 @@
 import React from "react";
-import { Search, Package, Home, Moon, Sun } from "lucide-react";
+import { Search, Package, PackagePlus, Home, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/ui/theme-provider";
 
-type PageType = "home" | "search" | "install";
+type PageType = "home" | "search" | "install" | "updates";
 
 interface NavbarProps {
   setCurrentPage: (page: PageType) => void;
@@ -30,6 +30,9 @@ const Navbar: React.FC<NavbarProps> = ({ setCurrentPage }) => {
           </Button>
           <Button variant="ghost" onClick={() => setCurrentPage("install")}>
             <Package className="mr-2 h-4 w-4" /> Installed
+          </Button>
+          <Button variant="ghost" onClick={() => setCurrentPage("updates")}>
+            <PackagePlus className="mr-2 h-4 w-4" /> Updates
           </Button>
           <Button
             variant="ghost"
