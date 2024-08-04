@@ -16,12 +16,14 @@ import { main } from "wailsjs/go/models";
 import { Badge } from "./ui/badge";
 import { Skeleton } from "./ui/skeleton";
 import PackageDetails from "./PackageDetails";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
-const Install = () => {
+const Installed = () => {
   const [installedPackages, setInstalledPackages] = useState<
     main.PackageInfo[]
   >([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [selectedPackage, setSelectedPackage] =
@@ -43,10 +45,7 @@ const Install = () => {
 
   useEffect(() => {
     fetchInstalledPackages();
-
-    // Set up polling to check for package changes every 5 seconds
     const intervalId = setInterval(fetchInstalledPackages, 5000);
-
     return () => clearInterval(intervalId);
   }, [fetchInstalledPackages]);
 
@@ -124,11 +123,30 @@ const Install = () => {
     }
 
     if (error) {
-      return <div className="text-red-500 pl-2">{error}</div>;
+      return (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      );
     }
 
     if (filteredPackages.length === 0) {
-      return <div className="text-red-500 pl-3">No packages found.</div>;
+      return (
+        <div className="p-3">
+          <Alert>
+            <AlertTitle className="font-bold text-lg">
+              No packages found
+            </AlertTitle>
+            <AlertDescription>
+              {searchTerm
+                ? "No packages match your search."
+                : "No installed packages found."}
+            </AlertDescription>
+          </Alert>
+        </div>
+      );
     }
 
     return (
@@ -160,6 +178,7 @@ const Install = () => {
     filteredPackages,
     PackageItem,
     installedPackages.length,
+    searchTerm,
   ]);
 
   return (
@@ -182,6 +201,7 @@ const Install = () => {
                 setSearchTerm(e.target.value)
               }
               className="flex-grow"
+              aria-label="Search installed packages"
             />
           </div>
           {renderContent}
@@ -191,4 +211,4 @@ const Install = () => {
   );
 };
 
-export default React.memo(Install);
+export default React.memo(Installed);

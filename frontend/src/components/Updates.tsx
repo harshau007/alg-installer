@@ -20,20 +20,16 @@ import {
 import { main } from "wailsjs/go/models";
 import { Badge } from "./ui/badge";
 import { Skeleton } from "./ui/skeleton";
-import { ArrowUpCircle } from "lucide-react";
+import { ArrowUpCircle, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-const Updates: React.FC = () => {
+const useAvailableUpdates = () => {
   const [availableUpdates, setAvailableUpdates] = useState<main.UpdateInfo[]>(
     []
   );
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState<string>("");
   const [totalDownloadSize, setTotalDownloadSize] = useState<string>("");
-  const [readableSizes, setReadableSizes] = useState<{ [key: string]: string }>(
-    {}
-  );
-  const [buttonLoading, setButtonLoading] = useState<boolean>(false);
 
   const fetchAvailableUpdates = useCallback(async () => {
     setIsLoading(true);
@@ -55,21 +51,25 @@ const Updates: React.FC = () => {
     }
   }, []);
 
-  const handleSinglePackageUpdate = async (pkg: string) => {
-    await UpdateSinglePkg(pkg);
-  };
-
-  const handleAllPackageUpdate = async () => {
-    setButtonLoading(true);
-    await UpdateAllPkg();
-    setButtonLoading(false);
-  };
-
   useEffect(() => {
     fetchAvailableUpdates();
     const intervalId = setInterval(fetchAvailableUpdates, 5000);
     return () => clearInterval(intervalId);
   }, [fetchAvailableUpdates]);
+
+  return {
+    availableUpdates,
+    isLoading,
+    error,
+    totalDownloadSize,
+    fetchAvailableUpdates,
+  };
+};
+
+const useReadableSizes = (availableUpdates: main.UpdateInfo[]) => {
+  const [readableSizes, setReadableSizes] = useState<{ [key: string]: string }>(
+    {}
+  );
 
   useEffect(() => {
     const fetchSizes = async () => {
@@ -82,11 +82,57 @@ const Updates: React.FC = () => {
     fetchSizes();
   }, [availableUpdates]);
 
+  return readableSizes;
+};
+
+const Updates: React.FC = () => {
+  const {
+    availableUpdates,
+    isLoading,
+    error,
+    totalDownloadSize,
+    fetchAvailableUpdates,
+  } = useAvailableUpdates();
+  const readableSizes = useReadableSizes(availableUpdates);
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [updatingAll, setUpdatingAll] = useState<boolean>(false);
+  const [updatingPackages, setUpdatingPackages] = useState<Set<string>>(
+    new Set()
+  );
+
   const filteredUpdates = useMemo(() => {
     return availableUpdates.filter((update) =>
       update.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [availableUpdates, searchTerm]);
+
+  const handleSinglePackageUpdate = async (pkg: string) => {
+    setUpdatingPackages((prev) => new Set(prev).add(pkg));
+    try {
+      await UpdateSinglePkg(pkg);
+    } catch (err) {
+      console.error(`Error updating package ${pkg}:`, err);
+    } finally {
+      setUpdatingPackages((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(pkg);
+        return newSet;
+      });
+      fetchAvailableUpdates();
+    }
+  };
+
+  const handleAllPackageUpdate = async () => {
+    setUpdatingAll(true);
+    try {
+      await UpdateAllPkg();
+    } catch (err) {
+      console.error("Error updating all packages:", err);
+    } finally {
+      setUpdatingAll(false);
+      fetchAvailableUpdates();
+    }
+  };
 
   const UpdateItem = useCallback(
     ({
@@ -101,6 +147,7 @@ const Updates: React.FC = () => {
       const index = rowIndex * 3 + columnIndex;
       const update = filteredUpdates[index];
       if (!update) return null;
+      const isUpdating = updatingPackages.has(update.name) || updatingAll;
       return (
         <div style={style} className="p-2">
           <Card className="h-full flex flex-col">
@@ -119,16 +166,20 @@ const Updates: React.FC = () => {
               <Badge variant="secondary" className="text-sm">
                 {readableSizes[update.name] || "Calculating..."}
               </Badge>
-              <Button onClick={() => handleSinglePackageUpdate(update.name)}>
+              <Button
+                onClick={() => handleSinglePackageUpdate(update.name)}
+                disabled={isUpdating}
+                aria-label={`Update ${update.name}`}
+              >
                 <ArrowUpCircle className="h-5 w-5 mr-2" />
-                Update
+                {isUpdating ? "Updating..." : "Update"}
               </Button>
             </CardFooter>
           </Card>
         </div>
       );
     },
-    [filteredUpdates]
+    [filteredUpdates, readableSizes, updatingPackages, updatingAll]
   );
 
   const renderContent = useMemo(() => {
@@ -145,8 +196,8 @@ const Updates: React.FC = () => {
                 <Skeleton className="h-4 w-[200px] mt-2" />
               </CardContent>
               <CardFooter className="mt-10 justify-between">
-                <Skeleton className="h-7 w-[80px]" />
-                <Skeleton className="h-7 w-[30px] rounded-full" />
+                <Skeleton className="h-7 w-[80px] rounded-full" />
+                <Skeleton className="h-10 w-[100px] rounded-md" />
               </CardFooter>
             </Card>
           ))}
@@ -155,12 +206,27 @@ const Updates: React.FC = () => {
     }
 
     if (error) {
-      return <div className="text-red-500 pl-2">{error}</div>;
+      return (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      );
     }
 
     if (filteredUpdates.length === 0) {
       return (
-        <div className="text-green-500 pl-3">All packages are up to date!</div>
+        <Alert>
+          <AlertTitle className="font-bold text-lg">
+            No updates available
+          </AlertTitle>
+          <AlertDescription>
+            {searchTerm
+              ? "No packages match your search."
+              : "All packages are up to date!"}
+          </AlertDescription>
+        </Alert>
       );
     }
 
@@ -187,7 +253,14 @@ const Updates: React.FC = () => {
         </AutoSizer>
       </div>
     );
-  }, [isLoading, error, filteredUpdates, UpdateItem, availableUpdates.length]);
+  }, [
+    isLoading,
+    error,
+    filteredUpdates,
+    UpdateItem,
+    availableUpdates.length,
+    searchTerm,
+  ]);
 
   return (
     <div className="space-y-6 h-full">
@@ -201,26 +274,20 @@ const Updates: React.FC = () => {
             setSearchTerm(e.target.value)
           }
           className="flex-grow"
+          aria-label="Search available updates"
         />
-        {buttonLoading ? (
-          <Button className="opacity-50 pointer-events-none">
-            <ArrowUpCircle className="h-5 w-5 mr-2" />
-            Updating...
-          </Button>
-        ) : (
-          <Button onClick={handleAllPackageUpdate} disabled={isLoading}>
-            <ArrowUpCircle className="h-5 w-5 mr-2" />
-            Update All
-          </Button>
-        )}
+        <Button
+          onClick={handleAllPackageUpdate}
+          disabled={updatingAll || availableUpdates.length === 0}
+          aria-label="Update all packages"
+        >
+          <ArrowUpCircle className="h-5 w-5 mr-2" />
+          {updatingAll ? "Updating..." : "Update All"}
+        </Button>
       </div>
-      {totalDownloadSize ? (
+      {totalDownloadSize && (
         <p className="text-sm text-muted-foreground pl-3">
           Total download size: {totalDownloadSize}
-        </p>
-      ) : (
-        <p className="text-sm text-muted-foreground pl-3">
-          Total download size: Calculating...
         </p>
       )}
       {renderContent}
