@@ -19,7 +19,7 @@ const Navbar: React.FC<NavbarProps> = ({ setCurrentPage }) => {
           className="text-2xl font-bold cursor-pointer"
           onClick={() => setCurrentPage("home")}
         >
-          Arch PM
+          Arka Package Manager
         </span>
         <div className="flex items-center space-x-4">
           <Button variant="ghost" onClick={() => setCurrentPage("home")}>

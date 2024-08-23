@@ -496,7 +496,7 @@ const Home = () => {
             {featuredApps.map((app, index) => (
               <Card
                 key={index}
-                className="h-full flex flex-col cursor-pointer"
+                className="h-full flex flex-col cursor-pointer hover:bg-muted transition-all duration-300"
                 onClick={() => handleSelectApp(app)}
               >
                 <CardHeader>

@@ -184,7 +184,10 @@ const PackageDetails: React.FC<PackageDetailsProps> = ({
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pl-2 pr-2">
         {Array.from({ length: 9 }, (_, i) => (
-          <Card key={i} className="h-[15rem] flex flex-col">
+          <Card
+            key={i}
+            className="h-[15rem] flex flex-col hover:bg-muted transition-all duration-300"
+          >
             <CardHeader>
               <Skeleton className="h-9 w-[250px]" />
             </CardHeader>

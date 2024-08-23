@@ -105,7 +105,7 @@ const Search: React.FC = () => {
       return (
         <div style={style} className="p-2">
           <Card
-            className="h-full flex flex-col grid-cols-3 cursor-pointer"
+            className="h-full flex flex-col grid-cols-3 cursor-pointer hover:bg-muted transition-all duration-300"
             onClick={() => setSelectedApp({ ...result })}
           >
             <CardHeader>

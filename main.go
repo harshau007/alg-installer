@@ -16,7 +16,7 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-//go:embed build/appicon.png
+//go:embed frontend/src/assets/icon/appicon.png
 var icon []byte
 
 func main() {
@@ -25,7 +25,7 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:             "apm",
+		Title:             "Arka Package Manager",
 		Width:             1124,
 		Height:            868,
 		MinWidth:          1024,
@@ -84,7 +84,10 @@ func main() {
 				Icon:    icon,
 			},
 		},
-		Linux: &linux.Options{},
+		Linux: &linux.Options{
+			Icon:             icon,
+			WebviewGpuPolicy: linux.WebviewGpuPolicyNever,
+		},
 	})
 
 	if err != nil {

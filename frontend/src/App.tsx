@@ -11,8 +11,6 @@ type PageType = "home" | "search" | "install" | "updates";
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<PageType>("home");
-  const [installPackage, setInstallPackage] = useState<string>("");
-
   const renderPage = () => {
     switch (currentPage) {
       case "home":
